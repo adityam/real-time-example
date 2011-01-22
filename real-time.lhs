@@ -115,7 +115,7 @@ and a means to display its "number"
 >    value :: Int
 >    value = 128*f'(Bit 1, Bit 1, Bit 1) + 64*f'(Bit 1, Bit 1, Bit 0) + 32*f'(Bit 1, Bit 0, Bit 1) 
 >          +  16*f'(Bit 1, Bit 0, Bit 0) +  8*f'(Bit 0, Bit 1, Bit 1) +  4*f'(Bit 0, Bit 1, Bit 0)
->          +   2*f'(Bit 0, Bit 0, Bit 1) +  f'(Bit 0, Bit 0, Bit 0) 
+>          +   2*f'(Bit 0, Bit 0, Bit 1) +    f'(Bit 0, Bit 0, Bit 0) 
 >    f'    = fromBit.(f!)
 
 Now, the definition of `codebook`. It is based on a recursive evaluation
