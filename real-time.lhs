@@ -27,7 +27,7 @@ function) of the source. Since the source is binary, we need only one quantity
 to characterize it, viz, the probability of being in state `0` in the
 beginning. 
 
-> type Matrix = Array (Bit, Bit) Rational
+> type Matrix = Array Pair Rational
 > type Vector = Array Bit Rational
 > getInitial :: Rational -> Vector
 > getInitial p = array (Bit 0, Bit 1) [(Bit 0,p), (Bit 1,1-p)]
@@ -70,6 +70,8 @@ used lists.
 
 > newtype Bit = Bit Int deriving (Eq, Show, Ord, Ix)
 > fromBit (Bit x) = fromIntegral x
+> type Pair = (Bit, Bit)
+
 > bits  = [Bit 0, Bit 1] 
 > bits2 = [(x,y) | x <- bits, y <- bits]
 > bits3 = [(x,y,z) | x <- bits, y <- bits, z <-bits ]
@@ -188,7 +190,9 @@ family.
 > allCodes :: [Code]
 > allCodes = map (codebook . Index) [0.. 255]
 >
-> realtimeCodes, memorylessCodes :: Array Time [Code]
+> type CodeFamily = Array Time [Code]
+>
+> realtimeCodes, memorylessCodes :: CodeFamily
 > realtimeCodes = array (Time 1, Time 3) list where
 >   list = do
 >       t <- map Time [1,2,3]
@@ -204,13 +208,15 @@ family.
 Joint Distributions (Information states)
 ========================================
 
-> type Pair = (Bit, Bit)
+> type Distribution1 = Array Pair             Rational
+> type Distribution2 = Array (Pair,Pair)      Rational
+> type Distribution3 = Array (Pair,Pair,Pair) Rational
 
 This function computes the joint distribution of $(X_1, Y_1)$  for any
 stage 1 code.
 
 > distribution1 :: Vector ->  Matrix -> Matrix 
->                -> Code -> Array Pair Rational
+>                -> Code -> Distribution1
 > distribution1 initial source channel code = array bounds1 list where
 >   list   = do
 >       (x1,y1) <- bits2
@@ -228,9 +234,8 @@ exported. So, we cannot define an instance for `(t1,...,t6)` using unsafe
 operators. The normal definitoin can be unoptimized. Hence, this
 grouping trick). 
 
-> distribution2 :: Vector ->  Matrix -> Matrix 
->               -> Array Pair Rational -> Code 
->               -> Array (Pair, Pair) Rational
+> distribution2 :: Vector ->  Matrix -> Matrix -> Distribution1 -> Code 
+>               -> Distribution2
 > distribution2 initial source channel dist1 code = array bounds2 list where
 >   list   = do
 >       (x1,y1) <- bits2
@@ -245,9 +250,8 @@ grouping trick).
 Now we define a function that gives the joint probability of
 $((X_1,Y_1), (X_2, Y_2), (X_3, Y_3))$.
 
-> distribution3 ::Vector ->  Matrix -> Matrix 
->               -> Array (Pair, Pair) Rational -> Code
->               -> Array (Pair, Pair, Pair) Rational
+> distribution3 ::Vector ->  Matrix -> Matrix -> Distribution2 -> Code
+>               -> Distribution3
 > distribution3 initial source channel dist2 code = array bounds3 list where
 >   list   = do
 >       (x1,y1) <- bits2
@@ -274,7 +278,7 @@ best from a list.
 > best :: (Ord a) => [(a, b)] -> (a, b)
 > best = minimumBy (compare `on` fst)
 
-> decode1 :: Array Time [Code] -> Matrix -> Array Pair Rational
+> decode1 :: CodeFamily -> Matrix -> Distribution1
 >         -> (Rational, Code)
 > decode1 family distortion dist = best values where
 >   values = do
@@ -289,7 +293,7 @@ best from a list.
 
 Now, to find the best decoder at time 2.
 
-> decode2 :: Array Time [Code] -> Matrix -> Array (Pair, Pair) Rational
+> decode2 :: CodeFamily -> Matrix -> Distribution2
 >         -> (Rational, Code)
 > decode2 family distortion dist = best values where
 >   values = do
@@ -305,7 +309,7 @@ Now, to find the best decoder at time 2.
 
 and, the best decoder at time 3.
 
-> decode3 :: Array Time [Code] -> Matrix -> Array (Pair, Pair, Pair) Rational 
+> decode3 :: CodeFamily -> Matrix -> Distribution3
 >         -> (Rational, Code)
 > decode3 family distortion dist = best values where
 >   values = do
@@ -332,8 +336,8 @@ We can instead use `Map.fromListWith` and combine all the strategies that
 lead to the same information state. Until we take care of storing all
 optimal decoders, doing this does not make sense.
 
-> states1 ::Array Time [Code] ->  Vector -> Matrix -> Matrix -> Matrix 
->       -> Map.Map(Array Pair Rational) (Rational,(Code, Code))
+> states1 ::CodeFamily ->  Vector -> Matrix -> Matrix -> Matrix 
+>       -> Map.Map Distribution1 (Rational,(Code, Code))
 > states1 family initial source channel distortion = Map.fromList list where
 >   decode1' = decode1 family distortion
 >   distribution1' = distribution1 initial source channel
@@ -346,9 +350,8 @@ optimal decoders, doing this does not make sense.
 
 Now, we construct all reachable states at time 2 for a given family.
 
-> states2 :: Array Time [Code] -> Vector -> Matrix -> Matrix -> Matrix 
->         -> Map.Map(Array (Pair, Pair) Rational)
->               ([Rational],([Code],[Code]))
+> states2 :: CodeFamily -> Vector -> Matrix -> Matrix -> Matrix 
+>         -> Map.Map Distribution2 ([Rational],([Code],[Code]))
 > states2 family initial source channel distortion = Map.fromList list where
 >   decode2' = decode2 family distortion
 >   distribution2' = distribution2 initial source channel 
@@ -363,9 +366,8 @@ Now, we construct all reachable states at time 2 for a given family.
 
 and, for states at time 3:
 
-> states3 :: Array Time [Code] -> Vector -> Matrix -> Matrix -> Matrix 
->         -> Map.Map(Array (Pair, Pair, Pair) Rational)
->               ([Rational],([Code],[Code]))
+> states3 :: CodeFamily -> Vector -> Matrix -> Matrix -> Matrix 
+>         -> Map.Map Distribution3 ([Rational],([Code],[Code]))
 > states3 family initial source channel distortion = Map.fromList list where
 >   decode3' = decode3 family distortion
 >   distribution3' = distribution3 initial source channel
@@ -407,7 +409,7 @@ optimize it. A look at profiler output shows that most of the time is spent
 on `decode3` function. This function can be optimized by making use of the
 structural results. The new code takes about 6 seconds to execute.
 
-> decode3Fast :: Matrix -> Array (Pair, Pair, Pair) Rational 
+> decode3Fast :: Matrix -> Distribution3
 >         -> (Rational, Code)
 > decode3Fast distortion dist = (sum errors, array bounds decoder) where
 >   bounds = ((Bit 0, Bit 0, Bit 0),(Bit 1, Bit 1, Bit 1))
@@ -426,8 +428,7 @@ structural results. The new code takes about 6 seconds to execute.
 Now we can redefine `states3` as follows
 
 > states3' :: Vector -> Matrix -> Matrix -> Matrix 
->          -> Map.Map(Array (Pair, Pair, Pair) Rational) 
->                  ([Rational], ([Code],[Code]))
+>          -> Map.Map Distribution3 ([Rational], ([Code],[Code]))
 > states3' initial source channel distortion = Map.fromList list where
 >   family = realtimeCodes
 >   decode3' = decode3Fast distortion
