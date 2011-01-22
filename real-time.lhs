@@ -158,10 +158,10 @@ Code filters
 We need a function to check if a code (from the 3-step codebook)
 measurable at time 1 and 2. The following function does that:
 
-> isMeasurable :: Int -> Code -> Bool
+> isMeasurable :: Time -> Code -> Bool
 > isMeasurable time code = and conditions where
->   conditions | time == 1 = map check1 bits
->              | time == 2 = map check2 bits2
+>   conditions | time == Time 1 = map check1 bits
+>              | time == Time 2 = map check2 bits2
 >              | otherwise = [True]
 >   check1   x   = all (code!(x, Bit 0, Bit 0)==) [ code!(x,y,z) | (y,z) <- bits2 ]
 >   check2 (x,y) = code!(x,y, Bit 0) == code!(x,y, Bit 1)
@@ -169,11 +169,11 @@ measurable at time 1 and 2. The following function does that:
 We also need a function to check if a code (from a 3-step codebook) is
 memoryless at time 1, 2 and 3. 
 
-> isMemoryless :: Int -> Code -> Bool
+> isMemoryless :: Time -> Code -> Bool
 > isMemoryless time code = and conditions where
->   conditions | time == 1 = map check1 bits
->              | time == 2 = map check2 bits
->              | time == 3 = map check3 bits
+>   conditions | time == Time 1 = map check1 bits
+>              | time == Time 2 = map check2 bits
+>              | time == Time 3 = map check3 bits
 >   check1 x = all (code!(    x, Bit 0, Bit 0)==) [code!(x,y,z) | (y,z) <- bits2]
 >   check2 y = all (code!(Bit 0,     y, Bit 0)==) [code!(x,y,z) | (x,z) <- bits2]
 >   check3 z = all (code!(Bit 0, Bit 0,     z)==) [code!(x,y,z) | (x,y) <- bits2]
@@ -188,16 +188,16 @@ family.
 > allCodes :: [Code]
 > allCodes = map (codebook . Index) [0.. 255]
 >
-> realtimeCodes, memorylessCodes :: Array Int [Code]
-> realtimeCodes = array (1,3) list where
+> realtimeCodes, memorylessCodes :: Array Time [Code]
+> realtimeCodes = array (Time 1, Time 3) list where
 >   list = do
->       t <- [1,2,3]
+>       t <- map Time [1,2,3]
 >       let codes = filter (isMeasurable t) allCodes
 >       return(t,codes)
 >
-> memorylessCodes = array (1,3) list where
+> memorylessCodes = array (Time 1, Time 3) list where
 >   list = do
->       t <- [1,2,3]
+>       t <- map Time [1,2,3]
 >       let codes = filter (isMemoryless t) allCodes
 >       return(t,codes)
 
@@ -274,11 +274,11 @@ best from a list.
 > best :: (Ord a) => [(a, b)] -> (a, b)
 > best = minimumBy (compare `on` fst)
 
-> decode1 :: Array Int [Code] -> Matrix -> Array Pair Rational
+> decode1 :: Array Time [Code] -> Matrix -> Array Pair Rational
 >         -> (Rational, Code)
 > decode1 family distortion dist = best values where
 >   values = do
->       g1 <- family ! 1
+>       g1 <- family ! Time 1
 >       let errors = do
 >           (x1,y1) <- bits2
 >           let x'1 = g1!(y1, Bit 0, Bit 0)
@@ -289,11 +289,11 @@ best from a list.
 
 Now, to find the best decoder at time 2.
 
-> decode2 :: Array Int [Code] -> Matrix -> Array (Pair, Pair) Rational
+> decode2 :: Array Time [Code] -> Matrix -> Array (Pair, Pair) Rational
 >         -> (Rational, Code)
 > decode2 family distortion dist = best values where
 >   values = do
->       g2 <- family ! 2
+>       g2 <- family ! Time 2
 >       let errors = do
 >           (x1, y1) <- bits2
 >           (x2, y2) <- bits2
@@ -305,11 +305,11 @@ Now, to find the best decoder at time 2.
 
 and, the best decoder at time 3.
 
-> decode3 :: Array Int [Code] -> Matrix -> Array (Pair, Pair, Pair) Rational 
+> decode3 :: Array Time [Code] -> Matrix -> Array (Pair, Pair, Pair) Rational 
 >         -> (Rational, Code)
 > decode3 family distortion dist = best values where
 >   values = do
->       g3 <- family ! 3
+>       g3 <- family ! Time 3
 >       let errors = do
 >           (x1, y1) <- bits2
 >           (x2, y2) <- bits2
@@ -332,13 +332,13 @@ We can instead use `Map.fromListWith` and combine all the strategies that
 lead to the same information state. Until we take care of storing all
 optimal decoders, doing this does not make sense.
 
-> states1 ::Array Int [Code] ->  Vector -> Matrix -> Matrix -> Matrix 
+> states1 ::Array Time [Code] ->  Vector -> Matrix -> Matrix -> Matrix 
 >       -> Map.Map(Array Pair Rational) (Rational,(Code, Code))
 > states1 family initial source channel distortion = Map.fromList list where
 >   decode1' = decode1 family distortion
 >   distribution1' = distribution1 initial source channel
 >   list = do
->       c1 <- family ! 1
+>       c1 <- family ! Time 1
 >       let dist = distribution1' c1
 >           (cost,g1) = decode1' dist
 >           strategy  = (cost,(c1,g1))
@@ -346,7 +346,7 @@ optimal decoders, doing this does not make sense.
 
 Now, we construct all reachable states at time 2 for a given family.
 
-> states2 :: Array Int [Code] -> Vector -> Matrix -> Matrix -> Matrix 
+> states2 :: Array Time [Code] -> Vector -> Matrix -> Matrix -> Matrix 
 >         -> Map.Map(Array (Pair, Pair) Rational)
 >               ([Rational],([Code],[Code]))
 > states2 family initial source channel distortion = Map.fromList list where
@@ -354,7 +354,7 @@ Now, we construct all reachable states at time 2 for a given family.
 >   distribution2' = distribution2 initial source channel 
 >   states1' = states1 family initial source channel distortion
 >   list = do
->       c2 <- family ! 2
+>       c2 <- family ! Time 2
 >       (dist1, (cost1,(c1,g1))) <- Map.toList states1' 
 >       let dist2 = distribution2' dist1 c2
 >           (cost2, g2) = decode2' dist2
@@ -363,7 +363,7 @@ Now, we construct all reachable states at time 2 for a given family.
 
 and, for states at time 3:
 
-> states3 :: Array Int [Code] -> Vector -> Matrix -> Matrix -> Matrix 
+> states3 :: Array Time [Code] -> Vector -> Matrix -> Matrix -> Matrix 
 >         -> Map.Map(Array (Pair, Pair, Pair) Rational)
 >               ([Rational],([Code],[Code]))
 > states3 family initial source channel distortion = Map.fromList list where
@@ -371,7 +371,7 @@ and, for states at time 3:
 >   distribution3' = distribution3 initial source channel
 >   states2' = states2 family initial source channel distortion
 >   list = do
->       c3 <- family ! 3
+>       c3 <- family ! Time 3
 >       (dist2, (cost2,(c12,g12))) <- Map.toList states2'
 >       let dist3 = distribution3' dist2 c3
 >           (cost3, g3) = decode3' dist3
@@ -434,7 +434,7 @@ Now we can redefine `states3` as follows
 >   distribution3' = distribution3 initial source channel
 >   states2' = states2 family initial source channel distortion
 >   list = do
->       c3 <- family ! 3
+>       c3 <- family ! Time 3
 >       (dist2, (cost2,(c12,g12))) <- Map.toList states2' 
 >       let dist3 = distribution3' dist2 c3
 >           (cost3, g3) = decode3' dist3
