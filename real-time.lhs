@@ -119,10 +119,10 @@ decided to use a memoized version. The original version is now called
 >       n <- [0..255]
 >       let codeFunction = codebook' n
 >           code = array ( (0,0,0), (1,1,1) ) codelist where
->           codelist = do
->               (x,y,z) <- bits3
->               let output = codeFunction [x,y,z]
->               return ((x,y,z), output)
+>             codelist = do
+>                 (x,y,z) <- bits3
+>                 let output = codeFunction [x,y,z]
+>                 return ((x,y,z), output)
 >       return (n, code)
 
 > codebook' :: Int -> ([Int] -> Int)
@@ -483,8 +483,8 @@ Now, the main program:
 >   horizon = 3
 >   outputs = do
 >      i <- [0.4::Rational] -- [0.1, 0.2 .. 0.5 :: Rational ]
->      s0 <- [0.1::Rational] -- [0.0, 0.1 .. 1.0 :: Rational ]
->      s1 <- [1.0::Rational] -- [0.0, 0.1 .. 1.0 :: Rational ]
+>      s0 <- [0.0::Rational] -- [0.0, 0.1 .. 1.0 :: Rational ]
+>      s1 <- [0.1::Rational] -- [0.0, 0.1 .. 1.0 :: Rational ]
 >      c0 <- [0.1::Rational] -- [0.0, 0.1 .. 0.5 :: Rational ]
 >      c1 <- [0.0::Rational] -- [0.0, 0.1 .. 0.5 :: Rational ]
 >      let initial    = getInitial    i
