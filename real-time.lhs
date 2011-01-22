@@ -80,6 +80,10 @@ used lists.
 > bounds2 = ( (pair00, pair00), (pair11, pair11) )
 > bounds3 = ( (pair00, pair00, pair00), (pair11, pair11, pair11) )
 
+We also define a newtype for time.
+
+> newtype Time = Time Int deriving (Eq, Show, Ord, Ix)
+
 The codebook
 ============
 
@@ -116,14 +120,15 @@ the original implementation it was taking 40% of the time. So, we
 decided to use a memoized version. The original version is now called
 `codebook'`
 
-> codebook :: Int -> Code
+> newtype Index = Index Int deriving (Show, Eq, Ord, Ix)
+> codebook :: Index -> Code
 > codebook = (!) codebookArray
 >
-> codebookArray :: Array Int Code
+> codebookArray :: Array Index Code
 > codebookArray = array bounds list where
->   bounds = (0,255) 
+>   bounds = (Index 0, Index 255) 
 >   list   = do
->       n <- [0..255]
+>       n <- map Index [0.. 255]
 >       let codeFunction = codebook' n
 >           code = array ( (Bit 0, Bit 0, Bit 0), (Bit 1, Bit 1, Bit 1) ) codelist where
 >             codelist = do
@@ -132,11 +137,11 @@ decided to use a memoized version. The original version is now called
 >                 return ((x,y,z), output)
 >       return (n, code)
 
-> codebook' :: Int -> ([Bit] -> Bit)
-> codebook' n [] | n < 2 = Bit n
->                | otherwise = error $ "index out of bounds:" ++ show n
+> codebook' :: Index -> ([Bit] -> Bit)
+> codebook' (Index n) [] | n < 2 = Bit n
+>                        | otherwise = error $ "index out of bounds:" ++ show n
 >
-> codebook' n list@(Bit x:xs) = codebook' (n `func` s) xs where
+> codebook' (Index n) list@(Bit x:xs) = codebook' (Index (n `func` s)) xs where
 >   s = 2^(2^(length list - 1))
 >   func | x == 0 = rem
 >        | x == 1 = div
@@ -144,7 +149,7 @@ decided to use a memoized version. The original version is now called
 
 Lets do a quick check to see if the cobebook is working properly.
 
-> prop_Codebook n = inRange (0,255) n  ==> show n == showCode3 (codebook n)
+> prop_Codebook n = inRange (0,255) n  ==> show n == showCode3 (codebook (Index n))
 >      where types = n :: Int
 
 Code filters
@@ -181,7 +186,7 @@ Later, we will find optimal encoders and decoders from within each
 family.
 
 > allCodes :: [Code]
-> allCodes = map codebook [0..255]
+> allCodes = map (codebook . Index) [0.. 255]
 >
 > realtimeCodes, memorylessCodes :: Array Int [Code]
 > realtimeCodes = array (1,3) list where
