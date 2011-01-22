@@ -10,7 +10,7 @@ Haskell; Haskell is a lazy functional language, which appeared to be a
 good match for the task at hand. 
 
 > module Main  where
-> import Array ((!), Array, array, inRange)
+> import Array ((!), Array, array, inRange, Ix)
 > import Data.Function (on)
 > import Data.List (minimumBy)
 > import qualified Data.Map as Map (fromList, toList, Map, elems) 
@@ -27,10 +27,10 @@ function) of the source. Since the source is binary, we need only one quantity
 to characterize it, viz, the probability of being in state `0` in the
 beginning. 
 
-> type Matrix = Array (Int, Int) Rational
-> type Vector = Array Int Rational
+> type Matrix = Array (Bit, Bit) Rational
+> type Vector = Array Bit Rational
 > getInitial :: Rational -> Vector
-> getInitial p = array (0,1) [(0,p), (1,1-p)]
+> getInitial p = array (Bit 0, Bit 1) [(Bit 0,p), (Bit 1,1-p)]
 
 The variable `source` represents the matrix of transition probability of
 the source. It is characterized by two quantities: the crossover
@@ -38,11 +38,11 @@ probabilities at states `0` and `1`.
 
 > getSource :: Rational -> Rational -> Matrix
 > getSource p0 p1 = array bounds list where
->   bounds = ((0,0),(1,1))
->   list   = [ ((0,0), 1 - p0 )
->            , ((0,1), p0     )
->            , ((1,0), p1     )
->            , ((1,1), 1 - p1 )]
+>   bounds = ((Bit 0, Bit 0),(Bit 1, Bit 1))
+>   list   = [ ((Bit 0, Bit 0), 1 - p0 )
+>            , ((Bit 0, Bit 1), p0     )
+>            , ((Bit 1, Bit 0), p1     )
+>            , ((Bit 1, Bit 1), 1 - p1 )]
 
 The variable `channel` represents the channel matrix. It is also
 characterized by two quantities: the crossover probabilities for inputs
@@ -58,11 +58,11 @@ identified, and the distortion when `1` is not identified.
 
 > getDistortion :: Rational -> Rational -> Matrix
 > getDistortion d0 d1 = array bounds list where
->   bounds = ((0,0),(1,1))
->   list   = [((0,0), 0 )
->            ,((0,1), d0)
->            ,((1,0), d1)
->            ,((1,1), 0 )]
+>   bounds = ((Bit 0, Bit 0),(Bit 1, Bit 1))
+>   list   = [((Bit 0, Bit 0), 0 )
+>            ,((Bit 0, Bit 1), d0)
+>            ,((Bit 1, Bit 0), d1)
+>            ,((Bit 1, Bit 1), 0 )]
 
 Preliminaries
 =============
@@ -70,7 +70,9 @@ Preliminaries
 All the alphabets in this code are binary, so we define some commonly
 used lists.
 
-> bits = [0,1] :: [Int]
+> newtype Bit = Bit Int deriving (Eq, Show, Ord, Ix)
+> fromBit (Bit x) = fromIntegral x
+> bits  = [Bit 0, Bit 1] 
 > bits2 = [(x,y) | x <- bits, y <- bits]
 > bits3 = [(x,y,z) | x <- bits, y <- bits, z <-bits ]
 
@@ -93,15 +95,16 @@ inputs:
 We define `codebook` that does this. First we define a data type `Code`
 and a means to display its "number"
 
-> type Code =  Array (Int,Int,Int) Int
+> type Code =  Array (Bit,Bit,Bit) Bit
 
     -- instance Show Code where
     --   show = showCode3
 
 > showCode3 :: Code -> String
 > showCode3 f = show value where
->    value = 128*f!(1,1,1) + 64*f!(1,1,0) + 32*f!(1,0,1) + 16*f!(1,0,0)
->            + 8*f!(0,1,1) + 4*f!(0,1,0) + 2*f!(0,0,1) + f!(0,0,0)
+>    value = 128*f'(Bit 1, Bit 1, Bit 1) + 64*f'(Bit 1, Bit 1, Bit 0) + 32*f'(Bit 1, Bit 0, Bit 1) + 16*f'(Bit 1, Bit 0, Bit 0)
+>            + 8*f'(Bit 0, Bit 1, Bit 1) + 4*f'(Bit 0, Bit 1, Bit 0) + 2*f'(Bit 0, Bit 0, Bit 1) + f'(Bit 0, Bit 0, Bit 0)
+>    f' = fromBit.(f!)
 
 Now, the definition of `codebook`. It is based on a recursive evaluation
 of base2 coefficients. The function `codebook` is called many times; in
@@ -118,18 +121,18 @@ decided to use a memoized version. The original version is now called
 >   list   = do
 >       n <- [0..255]
 >       let codeFunction = codebook' n
->           code = array ( (0,0,0), (1,1,1) ) codelist where
+>           code = array ( (Bit 0, Bit 0, Bit 0), (Bit 1, Bit 1, Bit 1) ) codelist where
 >             codelist = do
 >                 (x,y,z) <- bits3
 >                 let output = codeFunction [x,y,z]
 >                 return ((x,y,z), output)
 >       return (n, code)
 
-> codebook' :: Int -> ([Int] -> Int)
-> codebook' n [] | n < 2 = n
+> codebook' :: Int -> ([Bit] -> Bit)
+> codebook' n [] | n < 2 = Bit n
 >                | otherwise = error $ "index out of bounds:" ++ show n
 >
-> codebook' n list@(x:xs) = codebook' (n `func` s) xs where
+> codebook' n list@(Bit x:xs) = codebook' (n `func` s) xs where
 >   s = 2^(2^(length list - 1))
 >   func | x == 0 = rem
 >        | x == 1 = div
@@ -151,8 +154,8 @@ measurable at time 1 and 2. The following function does that:
 >   conditions | time == 1 = map check1 bits
 >              | time == 2 = map check2 bits2
 >              | otherwise = [True]
->   check1   x   = all (code!(x,0,0)==) [ code!(x,y,z) | (y,z) <- bits2 ]
->   check2 (x,y) = code!(x,y,0) == code!(x,y,1)
+>   check1   x   = all (code!(x, Bit 0, Bit 0)==) [ code!(x,y,z) | (y,z) <- bits2 ]
+>   check2 (x,y) = code!(x,y, Bit 0) == code!(x,y, Bit 1)
 
 We also need a function to check if a code (from a 3-step codebook) is
 memoryless at time 1, 2 and 3. 
@@ -162,9 +165,9 @@ memoryless at time 1, 2 and 3.
 >   conditions | time == 1 = map check1 bits
 >              | time == 2 = map check2 bits
 >              | time == 3 = map check3 bits
->   check1 x = all (code!(x,0,0)==) [code!(x,y,z) | (y,z) <- bits2]
->   check2 y = all (code!(0,y,0)==) [code!(x,y,z) | (x,z) <- bits2]
->   check3 z = all (code!(0,0,z)==) [code!(x,y,z) | (x,y) <- bits2]
+>   check1 x = all (code!(    x, Bit 0, Bit 0)==) [code!(x,y,z) | (y,z) <- bits2]
+>   check2 y = all (code!(Bit 0,     y, Bit 0)==) [code!(x,y,z) | (x,z) <- bits2]
+>   check3 z = all (code!(Bit 0, Bit 0,     z)==) [code!(x,y,z) | (x,y) <- bits2]
 
 Code families
 ----------------
@@ -192,7 +195,7 @@ family.
 Joint Distributions (Information states)
 ========================================
 
-> type Pair = (Int, Int)
+> type Pair = (Bit, Bit)
 
 This function computes the joint distribution of $(X_1, Y_1)$  for any
 stage 1 code.
@@ -200,10 +203,10 @@ stage 1 code.
 > distribution1 :: Vector ->  Matrix -> Matrix 
 >                -> Code -> Array Pair Rational
 > distribution1 initial source channel code = array bounds list where
->   bounds = ((0,0), (1,1))
+>   bounds = ((Bit 0, Bit 0), (Bit 1, Bit 1))
 >   list   = do
 >       (x1,y1) <- bits2
->       let z1  =  code!(x1,0,0) 
+>       let z1  =  code!(x1, Bit 0, Bit 0) 
 >       -- TODO: raise an error if code is not measurable at time 1
 >           p   = initial!x1 * channel!(z1, y1)
 >       return ((x1,y1), p)
@@ -221,11 +224,11 @@ grouping trick).
 >               -> Array Pair Rational -> Code 
 >               -> Array (Pair, Pair) Rational
 > distribution2 initial source channel dist1 code = array bounds list where
->   bounds = ( ((0,0),(0,0)), ((1,1),(1,1)) )
+>   bounds = ( ((Bit 0, Bit 0),(Bit 0, Bit 0)), ((Bit 1, Bit 1),(Bit 1, Bit 1)) )
 >   list   = do
 >       (x1,y1) <- bits2
 >       (x2,y2) <- bits2
->       let z2 = code!(x1,x2,0)
+>       let z2 = code!(x1,x2, Bit 0)
 >       -- TODO: raise an error if code is not measurable at time 2
 >           p = channel!(z2, y2)
 >             * source !(x1, x2)
@@ -239,7 +242,7 @@ $((X_1,Y_1), (X_2, Y_2), (X_3, Y_3))$.
 >               -> Array (Pair, Pair) Rational -> Code
 >               -> Array (Pair, Pair, Pair) Rational
 > distribution3 initial source channel dist2 code = array bounds list where
->   bounds = ( ((0,0), (0,0), (0,0)), ((1,1), (1,1), (1,1)) )
+>   bounds = ( ((Bit 0, Bit 0), (Bit 0, Bit 0), (Bit 0, Bit 0)) , ((Bit 1, Bit 1), (Bit 1, Bit 1), (Bit 1, Bit 1)) )
 >   list   = do
 >       (x1,y1) <- bits2
 >       (x2,y2) <- bits2
@@ -272,7 +275,7 @@ best from a list.
 >       g1 <- family ! 1
 >       let errors = do
 >           (x1,y1) <- bits2
->           let x'1 = g1!(y1,0,0)
+>           let x'1 = g1!(y1, Bit 0, Bit 0)
 >               err = distortion!(x1, x'1) * dist!(x1, y1)
 >           return err
 >       let cost = sum errors 
@@ -288,7 +291,7 @@ Now, to find the best decoder at time 2.
 >       let errors = do
 >           (x1, y1) <- bits2
 >           (x2, y2) <- bits2
->           let x'2  = g2!(y1, y2, 0)
+>           let x'2  = g2!(y1, y2, Bit 0)
 >               err  = distortion!(x2, x'2) * dist!((x1,y1), (x2,y2))
 >           return err
 >       let cost = sum errors
@@ -401,7 +404,7 @@ structural results. The new code takes about 6 seconds to execute.
 > decode3Fast :: Matrix -> Array (Pair, Pair, Pair) Rational 
 >         -> (Rational, Code)
 > decode3Fast distortion dist = (sum errors, array bounds decoder) where
->   bounds = ((0,0,0),(1,1,1))
+>   bounds = ((Bit 0, Bit 0, Bit 0),(Bit 1, Bit 1, Bit 1))
 >   (errors,decoder) = unzip result
 >   result = do
 >       (y1,y2,y3) <- bits3
@@ -411,7 +414,8 @@ structural results. The new code takes about 6 seconds to execute.
 >       (x1,x2,x3) <- bits3
 >       let d = distortion!(x3,x') * dist!( (x1,y1), (x2,y2), (x3,y3))
 >       return d
->   optimalDecode inputs = min (totalD inputs 0,0) (totalD inputs 1,1)
+>   optimalDecode inputs = min (totalD inputs $ Bit 0, Bit 0) 
+>                              (totalD inputs $ Bit 1, Bit 1)
 
 Now we can redefine `states3` as follows
 
@@ -463,16 +467,16 @@ the result later on.
 >                  , unwords ["  decoder:", showCodes g]] 
 >       showSystem initial source channel distortion horizon 
 >           = unlines list where
->               list = [ unwords ["- initial:", showR $ initial!0 ]
+>               list = [ unwords ["- initial:", showR $ initial!Bit 0 ]
 >                      , unwords ["- source:" 
->                                , showR $ source!(0,1)
->                                , showR $ source!(1,0)]
+>                                , showR $ source!(Bit 0, Bit 1)
+>                                , showR $ source!(Bit 1, Bit 0)]
 >                      , unwords ["- channel:"
->                                 , showR $ channel!(0,1)
->                                 , showR $ channel!(1,0)]
+>                                 , showR $ channel!(Bit 0, Bit 1)
+>                                 , showR $ channel!(Bit 1, Bit 0)]
 >                      , unwords ["- distortion:"
->                                , showR $ distortion!(0,1)
->                                , showR $ distortion!(1,0)]]
+>                                , showR $ distortion!(Bit 0, Bit 1)
+>                                , showR $ distortion!(Bit 1, Bit 0)]]
 >       showR = show . fromRational
 >       showCodes codes = "[" ++ (unwords $ map showCode3 codes) ++ "]"
 
