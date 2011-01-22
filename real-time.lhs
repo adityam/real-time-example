@@ -37,8 +37,7 @@ the source. It is characterized by two quantities: the crossover
 probabilities at states `0` and `1`. 
 
 > getSource :: Rational -> Rational -> Matrix
-> getSource p0 p1 = array bounds list where
->   bounds = ((Bit 0, Bit 0),(Bit 1, Bit 1))
+> getSource p0 p1 = array bounds1 list where
 >   list   = [ ((Bit 0, Bit 0), 1 - p0 )
 >            , ((Bit 0, Bit 1), p0     )
 >            , ((Bit 1, Bit 0), p1     )
@@ -57,8 +56,7 @@ characterized by two parameters: the distortion when `0` is not
 identified, and the distortion when `1` is not identified.
 
 > getDistortion :: Rational -> Rational -> Matrix
-> getDistortion d0 d1 = array bounds list where
->   bounds = ((Bit 0, Bit 0),(Bit 1, Bit 1))
+> getDistortion d0 d1 = array bounds1 list where
 >   list   = [((Bit 0, Bit 0), 0 )
 >            ,((Bit 0, Bit 1), d0)
 >            ,((Bit 1, Bit 0), d1)
@@ -75,6 +73,12 @@ used lists.
 > bits  = [Bit 0, Bit 1] 
 > bits2 = [(x,y) | x <- bits, y <- bits]
 > bits3 = [(x,y,z) | x <- bits, y <- bits, z <-bits ]
+
+> pair00  = (Bit 0, Bit 0)
+> pair11  = (Bit 1, Bit 1)
+> bounds1 = (pair00, pair11)
+> bounds2 = ( (pair00, pair00), (pair11, pair11) )
+> bounds3 = ( (pair00, pair00, pair00), (pair11, pair11, pair11) )
 
 The codebook
 ============
@@ -202,8 +206,7 @@ stage 1 code.
 
 > distribution1 :: Vector ->  Matrix -> Matrix 
 >                -> Code -> Array Pair Rational
-> distribution1 initial source channel code = array bounds list where
->   bounds = ((Bit 0, Bit 0), (Bit 1, Bit 1))
+> distribution1 initial source channel code = array bounds1 list where
 >   list   = do
 >       (x1,y1) <- bits2
 >       let z1  =  code!(x1, Bit 0, Bit 0) 
@@ -223,8 +226,7 @@ grouping trick).
 > distribution2 :: Vector ->  Matrix -> Matrix 
 >               -> Array Pair Rational -> Code 
 >               -> Array (Pair, Pair) Rational
-> distribution2 initial source channel dist1 code = array bounds list where
->   bounds = ( ((Bit 0, Bit 0),(Bit 0, Bit 0)), ((Bit 1, Bit 1),(Bit 1, Bit 1)) )
+> distribution2 initial source channel dist1 code = array bounds2 list where
 >   list   = do
 >       (x1,y1) <- bits2
 >       (x2,y2) <- bits2
@@ -241,8 +243,7 @@ $((X_1,Y_1), (X_2, Y_2), (X_3, Y_3))$.
 > distribution3 ::Vector ->  Matrix -> Matrix 
 >               -> Array (Pair, Pair) Rational -> Code
 >               -> Array (Pair, Pair, Pair) Rational
-> distribution3 initial source channel dist2 code = array bounds list where
->   bounds = ( ((Bit 0, Bit 0), (Bit 0, Bit 0), (Bit 0, Bit 0)) , ((Bit 1, Bit 1), (Bit 1, Bit 1), (Bit 1, Bit 1)) )
+> distribution3 initial source channel dist2 code = array bounds3 list where
 >   list   = do
 >       (x1,y1) <- bits2
 >       (x2,y2) <- bits2
