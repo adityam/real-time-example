@@ -11,8 +11,8 @@ good match for the task at hand.
 
 > module Main  where
 > import Array ((!), Array, array, inRange, Ix)
-> import Data.Function (on)
 > import Data.List (minimumBy)
+> import Data.Ord (comparing)
 > import qualified Data.Map as Map (fromList, toList, Map, elems) 
 > import Test.QuickCheck ((==>),quickCheck)
 > import System.IO (hFlush, stdout)
@@ -278,7 +278,7 @@ the algorithm. For this purpose, we abstract out the code that finds the
 best from a list.
 
 > best :: (Ord a) => [(a, b)] -> (a, b)
-> best = minimumBy (compare `on` fst)
+> best = minimumBy (comparing fst)
 
 > decode1 :: CodeFamily -> Matrix -> Distribution1
 >         -> (Rational, Code)
@@ -487,7 +487,7 @@ the result later on.
 >                                , showR $ distortion!(Bit 0, Bit 1)
 >                                , showR $ distortion!(Bit 1, Bit 0)]]
 >       showR = show . fromRational
->       showCodes codes = "[" ++ (unwords $ map showCode3 codes) ++ "]"
+>       showCodes codes = "[" ++ unwords (map showCode3 codes) ++ "]"
 
 
 Now, the main program:
